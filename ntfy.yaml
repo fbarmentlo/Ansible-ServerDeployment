@@ -1,0 +1,88 @@
+---
+- name: Deploy ntfy for pushover
+  hosts: internal
+  gather_facts: true
+  become: true
+
+  vars_files:
+    - /home/frank/ansible/variables/become_vars.yaml
+    - /home/frank/ansible/variables/api_pushover.yaml
+
+  handlers:
+  - name: Sendtest
+    ansible.builtin.shell: ntfy send "test from $(hostname)"
+
+  tasks:
+  - name: Install pip
+    package:
+      name: python3-pip
+      state: present
+
+  - name: Install bottle python package
+    pip:
+      name: ntfy
+
+  - name: Create /opt/ntfy
+    ansible.builtin.file:
+      path: /opt/ntfy
+      owner: root
+      group: root
+      mode: '0755'
+      state: directory
+
+  - name: Create config file
+    ansible.builtin.file:
+      path: /opt/ntfy/ntfy.yml
+      state: touch
+      mode: u=rw,g=r,o=r
+
+  - name: Set config in file created above
+    blockinfile:
+      path: /opt/ntfy/ntfy.yml
+      block: |
+        backends: ["pushover"]
+        pushover: {"user_key": "{{ pushover_key }}"}
+
+  - name: Link config for root
+    ansible.builtin.file:
+      src: /opt/ntfy/ntfy.yml
+      dest: /root/.ntfy.yml
+      owner: root
+      group: root
+      state: link
+#    notify: Sendtest
+
+  - name: Link config for Sysadmin
+    ansible.builtin.file:
+      src: /opt/ntfy/ntfy.yml
+      dest: /home/sysadmin/.ntfy.yml
+      owner: sysadmin
+      group: sysadmin
+      state: link
+
+# path should be converted to a variable for easier maintenance -> clickup task created
+  - name: Push login notifcation config to Ubuntu
+    blockinfile:
+      path: /etc/bash.bashrc
+      block: |
+        export AUTO_NTFY_DONE_IGNORE="ntfy emacs htop info less mail man meld most mutt nano screen ssh tail tmux top vi vim watch sudo head crontab su"
+        if [[ -n $SSH_CLIENT ]]; then
+          if [[ $(echo $SSH_CLIENT | awk '{ print $1 }') != "192.168.5.12" ]]; then
+            /usr/local/bin/ntfy -c /opt/ntfy/ntfy.yml -t "New Login on $(hostname)" send "user $(whoami) succesfully logged in from $SSH_CLIENT"
+          fi
+        fi
+      state: present
+    when: ansible_distribution == 'Ubuntu'
+
+  - name: Push login notifcation config to CentOS
+    blockinfile:
+      path: /etc/bashrc
+      block: |
+        export AUTO_NTFY_DONE_IGNORE="ntfy emacs htop info less mail man meld most mutt nano screen ssh tail tmux top vi vim watch sudo head crontab su"
+        if [[ -n $SSH_CLIENT ]]; then
+          if [[ $(echo $SSH_CLIENT | awk '{ print $1 }') != "192.168.5.12" ]]; then
+            /usr/local/bin/ntfy -c /opt/ntfy/ntfy.yml -t "New Login on $(hostname)" send "user $(whoami) succesfully logged in from $SSH_CLIENT"
+          fi
+        fi
+      state: present
+    when: ansible_distribution == 'CentOS'

@@ -1,0 +1,20 @@
+#nfs-common
+---
+- name: Host-specific package management
+  hosts: all
+  vars:
+    sysadmin_groups: sudo
+  vars_files:
+    - /home/frank/ansible/variables/become_vars.yaml
+  gather_facts: true
+  become: true
+
+  tasks:
+
+# Install packages
+    - name: Install nfs-client
+      package:
+        name:
+        - nfs-common
+        state: present
+      when: inventory_hostname == "server10.svr.fb"

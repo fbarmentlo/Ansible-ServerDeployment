@@ -1,0 +1,19 @@
+---
+- name: Host customization for server10
+  hosts: server10.svr.fb
+  vars:
+    sysadmin_groups: sudo
+  vars_files:
+    - /home/frank/ansible/variables/become_vars.yaml
+  gather_facts: true
+  become: true
+  tasks:
+  - name: Mount backups kubernetes repositories
+    ansible.posix.mount:
+      src: 192.168.5.3:/KubernetesStructures
+      path: /opt/kubernetes
+      opts: rw,sync,hard,intr
+      boot: yes
+      state: mounted
+      fstype: nfs
+    when: inventory_hostname == "server10.svr.fb"

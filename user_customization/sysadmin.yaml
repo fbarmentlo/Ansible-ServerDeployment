@@ -1,0 +1,64 @@
+---
+- name: Set up our administrative user
+  hosts: all
+  vars:
+    sysadmin_groups: sudo
+  vars_files:
+    - /home/frank/ansible/variables/become_vars.yaml
+  gather_facts: true
+  become: true
+
+  tasks:
+# Create user, and give him an SSH-key
+    - name: Create User and add to sudo-group
+      user:
+        name: sysadmin
+        shell: /bin/bash
+        groups: sudo
+        append: true
+      when: ansible_distribution == 'Ubuntu'
+
+    - name: Create User and add to wheel-group
+      user:
+        name: sysadmin
+        shell: /bin/bash
+        groups: wheel
+        append: true
+      when: ansible_distribution == 'CentOS'
+
+    - name: Deploy SSHPortal-key
+      authorized_key:
+        manage_dir: true
+        user: sysadmin
+        state: present
+        key: https://deployment.fbarmentlo.nl/user-key.pub
+
+    - name: Ensure .ssh-dir exists and has right permissions
+      file:
+        dest: "/home/sysadmin/.ssh"
+        mode: 0700
+        owner: sysadmin
+        group: sysadmin
+        state: directory
+
+    - name: Create config file for git
+      ansible.builtin.file:
+        path: /home/sysadmin/.gitconfig
+        state: touch
+        owner: sysadmin
+        group: sysadmin
+        mode: '0644'
+
+    - name: Set config in file created above
+      blockinfile:
+        path: /home/sysadmin/.gitconfig
+        block: |
+          [user]
+                  name = Frank
+                  email = frank@fbarmentlo.nl
+          [pull]
+                  rebase = false
+          [core]
+                editor = nano
+          [credential]
+                helper = cache --timeout 86400

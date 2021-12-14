@@ -1,0 +1,288 @@
+# Handlers go into main.yaml!
+  - name: Update all packages to the latest version using Yum
+    when: ansible_distribution == 'CentOS'
+    yum:
+      update_cache: true
+      name: '*'
+      state: latest
+
+  - name: Update all packages to the latest version using apt
+    when: ansible_distribution == 'Ubuntu'
+    apt:
+      update_cache: true
+      upgrade: dist
+      cache_valid_time: 1200
+
+# Software
+  - name: install rkhunter
+    package:
+      name: rkhunter
+      state: present
+
+  - name: install aide
+    package:
+      name: aide
+      state: present
+
+  - name: "Configure the Aide Integrity Check cronjob"
+    ansible.builtin.cron:
+      name: "Aide Integrity Check"
+      minute: "0"
+      hour: "3"
+      user: root
+      job: "/usr/bin/aide.wrapper --config /etc/aide/aide.conf --check"
+      cron_file: aide_integrity_check
+
+  - name: uninstall cloud-init
+    package:
+      name: cloud-init
+      state: absent
+    when: ansible_distribution == 'Ubuntu'
+
+  - name: uninstall telnet
+    package:
+      name: telnet
+      state: absent
+    when: ansible_distribution == 'Ubuntu'
+
+# Config files
+  - name: Copying issue to /etc/issue
+    copy:
+      src: ./data/issue
+      dest: /etc/issue
+      owner: root
+      group: root
+      mode: '0644'
+      backup: true
+
+  - name: Copying issue to /etc/issue.net
+    copy:
+      src: ./data/issue
+      dest: /etc/issue.net
+      owner: root
+      group: root
+      mode: '0644'
+      backup: true
+
+  - name: Copying issue to /etc/issue.net
+    copy:
+      src: ./data/motd
+      dest: /etc/motd
+      owner: root
+      group: root
+      mode: '0644'
+      backup: true
+
+  - name: COnfigure umask
+    ansible.builtin.lineinfile:
+      path: /etc/login.defs
+      regexp: '^UMASK           022$'
+      line: 'UMASK           027'
+      backrefs: true
+
+  - name: Configure umask for CentOS
+    ansible.builtin.lineinfile:
+      path: /etc/bashrc
+      regexp: '^(.*)umask 022(.*)$'
+      line: '       umask 027'
+      backrefs: true
+    when: ansible_distribution == 'CentOS'
+
+  - name: Configure umask for CentOS
+    ansible.builtin.lineinfile:
+      path: /etc/profile
+      regexp: '^(.*)umask 022(.*)$'
+      line: '       umask 027'
+      backrefs: true
+    when: ansible_distribution == 'CentOS'
+
+# Modprobe stuff
+  - name: remove squashfs from kernel
+    community.general.modprobe:
+      name: squashfs
+      state: absent
+    when: ansible_distribution == 'CentOS'
+
+  - name: remove cramfs from kernel
+    community.general.modprobe:
+      name: cramfs
+      state: absent
+
+  - name: remove udf from kernel
+    community.general.modprobe:
+      name: udf
+      state: absent
+
+  - name: remove tipc from kernel
+    community.general.modprobe:
+      name: tipc
+      state: absent
+
+  - name: remove rds from kernel
+    community.general.modprobe:
+      name: rds
+      state: absent
+
+  - name: remove sctp from kernel
+    community.general.modprobe:
+      name: sctp
+      state: absent
+
+  - name: remove dccp from kernel
+    community.general.modprobe:
+      name: dccp
+      state: absent
+
+  - name: remove usb-storage from kernel
+    community.general.modprobe:
+      name: usb-storage
+      state: absent
+
+# System files
+  - name: Change permissions on /etc/passwd-
+    ansible.builtin.file:
+      path: /etc/passwd-
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: Change permissions on /etc/group-
+    ansible.builtin.file:
+      path: /etc/group-
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: Change permissions on /boot/grub/grub.cfg
+    ansible.builtin.file:
+      path: /boot/grub/grub.cfg
+      owner: root
+      group: root
+      mode: '0600'
+    when: ansible_distribution == 'Ubuntu'
+
+# /etc permisisons
+
+  - name: Change permissions on /etc/cron.hourly
+    ansible.builtin.file:
+      path: /etc/cron.hourly
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: Change permissions on /etc/cron.daily
+    ansible.builtin.file:
+      path: /etc/cron.daily
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: Change permissions on /etc/cron.weekly
+    ansible.builtin.file:
+      path: /etc/cron.weekly
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: Change permissions on /etc/cron.monthly
+    ansible.builtin.file:
+      path: /etc/cron.monthly
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: Change permissions on /etc/crontab
+    ansible.builtin.file:
+      path: /etc/crontab
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: Change permissions on /etc/at.deny
+    ansible.builtin.file:
+      path: /etc/at.deny
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: Change permissions on /etc/at.allow
+    ansible.builtin.file:
+      state: touch
+      path: /etc/at.allow
+      owner: root
+      group: root
+      mode: '0600'
+
+  - name: "And set its contents"
+    blockinfile:
+      path: /etc/at.allow
+      block: |
+        root
+        sysadmin
+
+# Fix Hyper-v fd0 console error
+  - name: remove floppy from kernel
+    community.general.modprobe:
+      name: floppy
+      state: absent
+
+  - name: Disabling floppy via modprobe config
+    copy:
+      dest: "/etc/modprobe.d/blacklist-floppy.conf"
+      content: |
+        blacklist floppy
+      owner: root
+      group: root
+      mode: '0600'
+    notify: dpkg-reconfigure_initramfs-tools
+
+
+  - name: Create /etc/systemd/system/tmp.mount
+    ansible.builtin.file:
+      path: /etc/systemd/system/tmp.mount
+      owner: root
+      group: root
+      mode: '0644'
+      state: touch
+
+  - name: "Secure /tmp - set mount config"
+    blockinfile:
+      path: /etc/systemd/system/tmp.mount
+      block: |
+        #  SPDX-License-Identifier: LGPL-2.1+
+        #
+        #  This file is part of systemd.
+        #
+        #  systemd is free software; you can redistribute it and/or modify it
+        #  under the terms of the GNU Lesser General Public License as published by
+        #  the Free Software Foundation; either version 2.1 of the License, or
+        #  (at your option) any later version.
+
+        [Unit]
+        Description=Temporary Directory (/tmp)
+        Documentation=man:hier(7)
+        Documentation=https://www.freedesktop.org/wiki/Software/systemd/APIFileSystems
+        ConditionPathIsSymbolicLink=!/tmp
+        DefaultDependencies=no
+        Conflicts=umount.target
+        Before=local-fs.target umount.target
+        After=swap.target
+
+        [Mount]
+        What=tmpfs
+        Where=/tmp
+        Type=tmpfs
+        Options=mode=1777,strictatime,nosuid,nodev,noexec
+
+        [Install]
+        WantedBy=local-fs.target
+    notify:
+      - restart tmp.mount
+
+
+# Restart wazuh-agent
+#  - name: Restart the wazuh-agent to apply stuff
+#    service:
+#      name: wazuh-agent
+#      state: restarted
+#    when: inventory_hostname not in groups['wazuh_server']

@@ -1,0 +1,33 @@
+---
+- name: CentOS Specific Package managemetn
+  hosts: all
+  vars:
+#    source_gitkey: ~/.ssh/sshportal-gitlab.key
+#    dest_gitkey_sysadmin: /home/sysadmin/.ssh/sshportal-gitlab.key
+    sysadmin_groups: sudo
+  vars_files:
+    - /home/frank/ansible/variables/become_vars.yaml
+  gather_facts: true
+  become: true
+
+  tasks:
+# Enable the EPEL Repo on CentOS machines
+    - name: Enable EPEL Repository on CentOS 8
+      package:
+        name: epel-release
+        state: latest
+      when: ansible_facts['os_family'] == 'CentOS' and ansible_facts['distribution_major_version'] == '8'
+
+    - name: Enable EPEL Repository on CentOS 7
+      package:
+        name: epel-release
+        state: latest
+      when: ansible_facts['os_family'] == 'CentOS' and ansible_facts['distribution_major_version'] == '7'
+
+# Update our system
+    - name: Update all packages to the latest version using Yum
+      when: ansible_distribution == 'CentOS'
+      yum:
+        update_cache: true
+        name: '*'
+        state: latest

@@ -1,0 +1,84 @@
+---
+- name: Main
+  hosts: all
+  vars:
+    sysadmin_groups: sudo
+  vars_files:
+    - /home/frank/ansible/variables/become_vars.yaml
+  gather_facts: true
+  become: true
+
+# Handlers
+  handlers:
+    - name: restart_crond_ubuntu
+      service:
+        name: cron
+        state: restarted
+      when: ansible_distribution == 'Ubuntu'
+
+    - name: restart_crond_centos
+      service:
+        name: cron
+        state: restarted
+      when: ansible_distribution == 'CentOS'
+
+    - name: Restart required service
+      service:
+        name: "{{ restart_service }}"
+        state: restarted
+
+    - name: remount tmp
+      systemd:
+        name: tmp.mount
+        state: restarted
+        daemon_reload: true
+      become: true
+
+    - name: dpkg-reconfigure_initramfs-tools
+      ansible.builtin.shell: "/usr/sbin/dpkg-reconfigure initramfs-tools"
+      when: ansible_distribution == 'Ubuntu'
+  tasks:
+# Remove some default stuff
+# /etc/update-motd.d/50-motd-news does MOTD spam
+    - name: remove ubuntu motd spam
+      become: true
+      file:
+        path: "/etc/update-motd.d/{{ item }}"
+        state: absent
+      loop:
+        - 80-livepatch
+        - 95-hwe-eol
+        - 10-help-text
+        - 50-motd-news
+      when: ansible_distribution == 'Ubuntu'
+
+# Time stuff
+    - name: Set timezone to Europe/Amsterdam
+      community.general.timezone:
+        name: Europe/Amsterdam
+      notify:
+        - restart_crond_ubuntu
+        - restart_crond_centos
+
+# Hardening and compliance
+#    - name: Fixes as recommended through Wazuh
+#      include: compliance/compliance.yaml
+
+# Imports and includes:
+# Users:
+- name: User configuration
+  import_playbook: user_customization/sysadmin.yaml
+# Services:
+- name: SSH server Configuration
+  import_playbook: service_configuration/sshd_configuration.yaml
+
+# Packages: 
+- name: package management
+  import_playbook: package_management/package_management_all.yaml
+- import_playbook: package_management/package_management_centos.yaml
+  when: ansible_distribution == 'CentOS'
+- import_playbook: package_management/package_management_ubuntu.yaml
+  when: ansible_distribution == 'Ubuntu'
+
+- import_playbook: package_management/package_management_perhost.yaml
+# Other:

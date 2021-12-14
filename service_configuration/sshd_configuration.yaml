@@ -1,0 +1,146 @@
+---
+- name: Configure SSH with default and hardening options
+  hosts: server03.svr.fb
+  vars_files:
+    - /home/frank/ansible/variables/become_vars.yaml
+  gather_facts: true
+  become: true
+
+  tasks:
+# Port config
+  - name: Set port for sshd to custom port
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      insertafter: '# What ports, IPs and protocols we listen for'
+      regexp: '^#?Port 22'
+      line: 'Port 2222'
+
+  - name: Add extra SSH-port for sshd on Gitlab
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      insertafter: '# What ports, IPs and protocols we listen for'
+      line: 'Port 22'
+    when: inventory_hostname in groups['gitlab']
+
+# Adress Family
+  - name: Set listening address (IPv4) for sshd
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#ListenAddress 0.0.0.0'
+      insertbefore: '#HostKey /etc/ssh/ssh_host_rsa_key'
+      line: 'ListenAddress 0.0.0.0'
+      backrefs: true
+
+# HostKeys
+  - name: Hostkeys - RSA
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?HostKey /etc/ssh/ssh_host_rsa_key'
+      line: 'HostKey /etc/ssh/ssh_host_rsa_key'
+      backrefs: true
+
+  - name: Hostkeys - ECDSA
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?HostKey /etc/ssh/ssh_host_ecdsa_key'
+      line: 'HostKey /etc/ssh/ssh_host_ecdsa_key'
+      backrefs: true
+
+  - name: Hostkeys - ed25519
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?HostKey /etc/ssh/ssh_host_ed25519_key'
+      line: 'HostKey /etc/ssh/ssh_host_ed25519_key'
+      backrefs: true
+
+# Logging
+  - name: Logging - SyslogFacility
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?SyslogFacility AUTH'
+      line: 'SyslogFacility AUTH'
+      backrefs: true
+
+  - name: Logging - LogLevel
+    lineinfile: dest=/etc/ssh/sshd_config regexp='^LogLevel' line='LogLevel VERBOSE'
+
+# Logging
+  - name: "auth - LoginGraceTime"
+    lineinfile: 
+      path: /etc/ssh/sshd_config
+      regexp: '^#?LoginGraceTime' 
+      line: 'LoginGraceTime 60'
+
+  - name: auth - permit root login
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?PermitRootLogin ([a-zA-Z]+)'
+      line: 'PermitRootLogin no'
+
+  - name: auth - enable Strict modes
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?StrictModes ([a-zA-Z]+)'
+      line: 'StrictModes yes'
+      backrefs: true
+
+  - name: auth - Disable RSAAuthentication
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?RSAAuthentication ([a-zA-Z]+)'
+      line: '#RSAAuthentication no'
+      backrefs: true
+
+  - name: auth - pubkey auth
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?PubkeyAuthentication'
+      line: 'PubkeyAuthentication yes'
+      backrefs: true
+
+# Enable PAM
+  - name: Enable PAM for SSH
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: '^#?UsePAM'
+      line: 'UsePAM yes'
+      backrefs: true
+
+# Algo's
+  - name: Configure the key exchange algorithms.
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      line: 'KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group14-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256 \n'
+      insertbefore: '# Logging'
+
+#  - name: Set Ports for sshd
+#    lineinfile:
+#      path: /etc/ssh/sshd_config
+#      regexp: '^KexAlgorithms [a-zA-Z0-9]'
+#      line: ''
+#      insertbefore: '# Logging'
+
+# Allow Users
+  - name: Enable and set AllowUsers
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      line: 'AllowUsers sysadmin'
+      state: present
+    when: not inventory_hostname in groups['gitlab']
+    tags:
+      - test
+
+  - name: Enable and set AllowUsers for gitlab
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      line: 'AllowUsers sysadmin git'
+    when: inventory_hostname in groups['gitlab']
+    tags:
+      - test
+
+  - name: Restart SSHD
+    set_fact:
+      restart_service: sshd
+    notify: 
+      - Restart required service
+#    service: name={{ application_server }} state=restarted
